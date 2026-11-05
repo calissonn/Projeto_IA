@@ -18,6 +18,9 @@ cp .env.example .env      # defina ACC_TOKEN com um valor aleatório longo
 npm run dev               # http://localhost:3000 (modo demonstração: sem IA, sem custo)
 ```
 
+**Versão para celular:** `npm run build:standalone` gera `dist/standalone/index.html`, a demonstração completa num
+único arquivo que roda no navegador, sem servidor ([detalhes](docs/USO.md#5-versão-para-celular-demonstração-sem-servidor)).
+
 ## Situação
 
 | Etapa | Situação |
@@ -128,7 +131,7 @@ O botão **Pausar todas as execuções** interrompe tudo de uma vez. A aba fica 
 `ACC_PRICE_INPUT_PER_MTOK`/`ACC_PRICE_OUTPUT_PER_MTOK`; padrão Claude Sonnet 5.5: US$ 2 / US$ 10 por milhão de tokens).
 O medido vem do Claude Agent SDK ao fim de cada execução (estimativa do SDK, não fatura). No modo demonstração ambos aparecem como “—”.
 
-A API do orquestrador (para automações) está documentada no [Guia de uso](docs/USO.md#7-api-do-orquestrador).
+A API do orquestrador (para automações) está documentada no [Guia de uso](docs/USO.md#8-api-do-orquestrador).
 
 ## Acabamento (Etapa 5)
 

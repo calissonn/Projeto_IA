@@ -18,7 +18,8 @@
     "test": "npm test --workspaces --if-present",
     "test:e2e": "node e2e/run.mjs",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "reset:demo": "node scripts/reset-demo.mjs"
+    "reset:demo": "node scripts/reset-demo.mjs",
+    "build:standalone": "node apps/web/standalone/build.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",

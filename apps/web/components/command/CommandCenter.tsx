@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api, useAcc } from '@/lib/store';
 import { ApprovalHistory, Approvals } from '../Approvals';
 import { LogViewer } from '../LogViewer';
-import { Button } from '../ui';
+import { ConfirmButton } from '../ConfirmButton';
 import { AgentsTab } from './AgentsTab';
 import { CostsTab } from './CostsTab';
 import { ErrorsTab } from './ErrorsTab';
@@ -52,7 +52,6 @@ export function CommandCenter() {
   };
 
   async function pauseAll() {
-    if (!window.confirm('Pausar todas as execuções em andamento?')) return;
     setPausing(true);
     setMessage(null);
     try {
@@ -74,9 +73,9 @@ export function CommandCenter() {
         </div>
         <div className="flex items-center gap-3">
           {message && <span className="text-sm text-slate-300">{message}</span>}
-          <Button variant="danger" disabled={pausing || !anyRunning} onClick={pauseAll} title={anyRunning ? '' : 'Nenhum projeto em execução'}>
+          <ConfirmButton disabled={pausing || !anyRunning} onConfirm={pauseAll} confirmLabel="Toque de novo para pausar tudo" title={anyRunning ? '' : 'Nenhum projeto em execução'}>
             ⏸ Pausar todas as execuções
-          </Button>
+          </ConfirmButton>
         </div>
       </div>
       <Kpis />

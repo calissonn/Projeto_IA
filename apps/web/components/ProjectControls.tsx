@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import type { Project } from '@acc/shared';
 import { api } from '@/lib/store';
+import { ConfirmButton } from './ConfirmButton';
 import { Button } from './ui';
 
 /** Pausar, retomar e cancelar um projeto. */
@@ -10,7 +11,6 @@ export function ProjectControls({ project, compact = false }: { project: Project
   const [error, setError] = useState<string | null>(null);
 
   async function run(action: 'pause' | 'resume' | 'cancel') {
-    if (action === 'cancel' && !window.confirm(`Cancelar o projeto "${project.name}"? As tarefas em andamento serão interrompidas.`)) return;
     setBusy(true);
     setError(null);
     try {
@@ -37,9 +37,9 @@ export function ProjectControls({ project, compact = false }: { project: Project
           ▶ Retomar
         </Button>
       )}
-      <Button variant="danger" className={size} disabled={busy} onClick={() => run('cancel')}>
+      <ConfirmButton className={size} disabled={busy} confirmLabel="Toque de novo para cancelar" onConfirm={() => run('cancel')}>
         Cancelar
-      </Button>
+      </ConfirmButton>
       {error && <span className="text-xs text-rose-300">{error}</span>}
     </div>
   );

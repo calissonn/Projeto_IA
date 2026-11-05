@@ -46,7 +46,18 @@ npm run dev        # orquestrador (127.0.0.1:4317) + web (http://localhost:3000)
 
 Dica do modo demonstração: inclua `#erro` na descrição para ver o fluxo de erro.
 
-## 5. Manutenção
+## 5. Versão para celular (demonstração sem servidor)
+
+```bash
+npm run build:standalone     # gera dist/standalone/index.html
+```
+
+Gera um único arquivo HTML com o prédio, a Central de Comando, o motor e os agentes de demonstração rodando
+no próprio navegador (banco em memória). Não precisa de servidor, não chama IA e não conecta ao seu computador;
+recarregar a página recomeça a demonstração. Serve para mostrar o sistema no celular. Para controlar projetos
+reais, use o app normal (`npm run dev`).
+
+## 6. Manutenção
 
 | Comando | Para quê |
 |---|---|
@@ -57,7 +68,7 @@ Dica do modo demonstração: inclua `#erro` na descrição para ver o fluxo de e
 Se o orquestrador for encerrado (Ctrl+C), os projetos em execução são **pausados** e as execuções ficam registradas como
 interrompidas. Ao voltar, a web reconecta sozinha; retome os projetos pela Central de Comando.
 
-## 6. Configuração (`.env`)
+## 7. Configuração (`.env`)
 
 | Variável | Padrão | Descrição |
 |---|---|---|
@@ -78,7 +89,7 @@ interrompidas. Ao voltar, a web reconecta sozinha; retome os projetos pela Centr
 | `ACC_DATA_DIR` | `data` | pasta dos bancos |
 | `ACC_CLAUDE_PATH` | — | caminho do executável do Claude Code, se necessário |
 
-## 7. API do orquestrador
+## 8. API do orquestrador
 
 Todas as rotas exigem `Authorization: Bearer <ACC_TOKEN>`.
 

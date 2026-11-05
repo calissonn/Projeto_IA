@@ -130,7 +130,17 @@ try {
   });
 
   await step('programador recebe o resultado da designer (conversa no 3º andar) e depois pede aprovação', async () => {
-    await waitActor('ag-programmer', (a) => a.state === 'talking' && a.floor === 3 && a.pose === 'talk', 'programador conversando no andar da designer');
+    // Chegou ao andar da designer durante a conversa (pode ainda estar andando até ela).
+    {
+      const end = Date.now() + 40000;
+      let last;
+      while (Date.now() < end) {
+        last = await actor('ag-programmer');
+        if (last.state === 'talking' && last.floor === 3) break;
+        await page.waitForTimeout(100);
+      }
+      if (!(last.state === 'talking' && last.floor === 3)) throw new Error(`programador conversando no andar da designer: ${JSON.stringify(last)}`);
+    }
     await shot('05-repasse-entre-agentes');
     await waitActor('ag-programmer', (a) => a.state === 'awaiting_approval' && a.pose === 'raise' && a.badge === 'alert' && a.floor === 4, 'programador pedindo aprovação');
     await page.getByTestId('approvals').getByText('Instalar dependência').waitFor();
@@ -182,7 +192,6 @@ try {
   });
 
   // ---------------------------------------------------------------- Central de Comando (Etapa 3)
-  page.on('dialog', (d) => d.accept());
   const tab = (name) => page.getByRole('tab', { name: new RegExp(`^${name}`) }).click();
 
   await step('Central de Comando: indicadores e projetos existentes', async () => {
@@ -238,6 +247,7 @@ try {
     await detail.getByText('Critérios de aceite').waitFor();
     await shot('17-detalhe-do-projeto');
     await detail.getByRole('button', { name: 'Cancelar' }).click();
+    await detail.getByRole('button', { name: 'Toque de novo para cancelar' }).click();
     await detail.getByText('Cancelado pelo administrador').waitFor();
   });
 
@@ -304,6 +314,7 @@ try {
     await row.getByRole('button', { name: /Retomar/ }).click();
     await row.getByText('Em execução').waitFor();
     await row.getByRole('button', { name: 'Cancelar' }).click();
+    await row.getByRole('button', { name: 'Toque de novo para cancelar' }).click();
   });
 
   await step('celular: prédio e Central de Comando sem rolagem horizontal', async () => {
