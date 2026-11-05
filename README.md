@@ -12,11 +12,12 @@ Arquitetura completa, custos, riscos e plano: **[docs/ARQUITETURA.md](docs/ARQUI
 | 1. Fundação (orquestrador, eventos, banco, modo demo) | ✅ concluída |
 | 2. Prédio animado (Next.js + Phaser) | ✅ concluída |
 | 3. Central de Comando | ✅ concluída |
-| 4. Execução real com Claude Code (Agent SDK) | ⏳ próxima |
-| 5. Acabamento | ⏳ |
+| 4. Execução real com Claude Code (Agent SDK) | ✅ concluída (validada com SDK simulado; falta a 1ª execução completa na sua máquina) |
+| 5. Acabamento | ⏳ próxima |
 
-> O **modo real ainda não está habilitado**: `ACC_MODE=real` encerra com uma mensagem explicando que ele chega na Etapa 4.
-> Tudo o que roda hoje é **demonstração**: nenhuma IA é chamada, nenhum arquivo é criado e nenhum comando é executado.
+> Há dois modos, escolhidos ao iniciar e nunca misturados: **demonstração** (`ACC_MODE=demo`, padrão: nenhuma IA,
+> nenhum arquivo, nenhum custo) e **real** (`ACC_MODE=real`: os agentes executam o Claude Code de verdade e geram custos).
+> Cada modo tem seu próprio banco (`data/demo.sqlite` e `data/real.sqlite`).
 
 ## Requisitos
 
@@ -68,6 +69,51 @@ O 1º andar (Operações) e as mesas marcadas “vaga” ficam prontos para expa
 Segurança da web: o navegador nunca recebe o token. A aplicação Next.js repassa as chamadas ao orquestrador
 pelo servidor (`/api/acc/*`, apenas rotas conhecidas; ações exigem mesma origem) e transmite os eventos em
 tempo real por Server-Sent Events (`/api/stream`).
+
+## Modo real (Etapa 4)
+
+### Como usar
+
+```bash
+claude login                 # ou defina ANTHROPIC_API_KEY no .env
+# no .env: ACC_MODE=real (e ajuste os limites de custo)
+npm run dev
+```
+
+Comece com um projeto pequeno (por exemplo, “Página HTML de lista de tarefas, sem dependências”), acompanhe pela
+Central de Comando e confira os arquivos em `workspaces/<id-do-projeto>/`.
+
+### O que acontece
+
+1. **Planejamento:** a coordenadora chama o Claude (sem nenhuma ferramenta) e devolve um plano estruturado, validado
+   pelo orquestrador (formato, dependências existentes, sem ciclos). O plano mostra o custo estimado e **só executa após sua aprovação**.
+2. **Execução:** cada tarefa roda o Claude Code (Agent SDK) dentro de `workspaces/<projeto>/`, que recebe um repositório
+   git próprio. O agente recebe a descrição, os critérios de aceite e o resumo/arquivos das tarefas anteriores.
+3. **Cada ferramenta passa pela política de permissões** (`canUseTool`): leitura e escrita dentro do workspace e
+   comandos da lista do cargo seguem direto; instalar dependências, excluir, publicar, `git push`, rede, comunicação
+   externa, operações financeiras, comandos fora da lista e arquivos fora do workspace vão para a **fila de aprovação**
+   e o agente fica com a mão levantada até você decidir. Se você negar, o agente recebe a recusa e segue sem a ação.
+4. **O prédio reflete as mensagens reais do SDK:** ler/buscar = analisando, escrever/editar = digitando, comando de teste = testes.
+5. **Resultado:** arquivos alterados são detectados comparando o workspace antes e depois; o agente entrega um relatório
+   estruturado (resumo e contagem de testes, junto com a saída real do comando de teste); o custo medido vem do SDK.
+6. **Limites:** custo por tarefa (`ACC_TASK_BUDGET_USD`), por projeto (pausa automática), por planejamento, número de
+   turnos e concorrência (padrão 1 no modo real). Pausar/cancelar interrompe o processo do Claude Code.
+
+### Segurança e isolamento
+
+- Os agentes só têm as ferramentas Read, Write, Edit, Glob, Grep, Bash e TodoWrite — **sem acesso à web**.
+- Configurações do usuário/projeto do Claude Code **não** são carregadas (`settingSources: []`).
+- O ambiente do processo é filtrado: só seguem PATH/HOME/locale, credenciais do Claude e proxy. Nada do orquestrador (como `ACC_TOKEN`) chega aos agentes.
+- **Sandbox do Bash** (`ACC_SANDBOX=auto`): restringe escrita ao workspace e bloqueia rede nos comandos. No Linux depende
+  de `bubblewrap` e `socat`; no macOS é nativo; **no Windows não existe — use WSL2**. Com `auto`, se o sandbox não estiver
+  disponível o comando roda sem ele; use `required` para recusar a execução nesse caso.
+- Limitação: uma pasta e um sandbox não são uma fronteira de segurança completa como um container. A credencial do
+  Claude fica visível para o processo do agente. Para código não confiável, rode tudo dentro de uma VM/container (etapa futura).
+
+### Custos
+
+O custo medido é o `total_cost_usd` informado pelo SDK (estimativa, não fatura). Com assinatura Pro/Max (login do
+Claude Code) o uso conta nos limites do plano; com `ANTHROPIC_API_KEY` é cobrado por token. Teste primeiro com limites baixos.
 
 ## Central de Comando (Etapa 3)
 
@@ -140,6 +186,7 @@ configurada em `ACC_ALLOWED_ORIGIN`.
 ```
 packages/shared         tipos de domínio, eventos e esquemas de validação (zod)
 apps/orchestrator       servidor HTTP + WebSocket, motor, planejador, executores, políticas, SQLite
+  src/claude            integração com o Claude Agent SDK (planejador, executor, ambiente, arquivos alterados)
 apps/web                Next.js + Tailwind + Phaser: prédio, painéis, proxy e stream de eventos
 e2e/                    teste ponta a ponta no navegador e capturas de tela
 ```

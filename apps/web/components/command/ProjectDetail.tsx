@@ -58,6 +58,41 @@ function TaskExtra({ t, onRun }: { t: Task; onRun: (id: string) => void }) {
   );
 }
 
+/** Artefatos entregues: tudo o que os agentes criaram ou alteraram, consolidado. */
+function Artifacts({ tasks, workspacePath, completed }: { tasks: Task[]; workspacePath: string | null; completed: boolean }) {
+  const mode = useAcc((s) => s.mode);
+  const files = useMemo(() => {
+    const map = new Map<string, { change: string; by: string }>();
+    for (const t of tasks) for (const f of t.filesChanged) map.set(f.path, { change: map.has(f.path) && f.change !== 'deleted' ? 'modified' : f.change, by: t.title });
+    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [tasks]);
+  if (!files.length && !workspacePath) return null;
+  return (
+    <Card title={completed ? 'Artefatos entregues' : 'Artefatos até agora'}>
+      {workspacePath && (
+        <p className="mb-3 text-sm">
+          Pasta do projeto: <code className="rounded bg-black/40 px-1.5 py-0.5 font-mono text-xs text-teal-200">{workspacePath}</code>
+        </p>
+      )}
+      {mode === 'demo' && <p className="mb-2 text-xs text-amber-300">Demonstração: a lista abaixo é ilustrativa, nenhum arquivo real foi criado.</p>}
+      {files.length ? (
+        <ul className="grid gap-1 font-mono text-xs sm:grid-cols-2" data-testid="artifacts">
+          {files.map(([p, f]) => (
+            <li key={p} className="truncate" title={`${p} — ${f.by}`}>
+              <span className={f.change === 'created' ? 'text-emerald-300' : f.change === 'deleted' ? 'text-rose-300' : 'text-sky-300'}>
+                {f.change === 'created' ? '+' : f.change === 'deleted' ? '−' : '~'}
+              </span>{' '}
+              {p}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <Empty>Nenhum arquivo ainda.</Empty>
+      )}
+    </Card>
+  );
+}
+
 export function ProjectDetail({ id }: { id: string }) {
   const project = useAcc((s) => s.projects[id]);
   const synced = useAcc((s) => s.synced);
@@ -110,6 +145,8 @@ export function ProjectDetail({ id }: { id: string }) {
           </div>
         ))}
       </div>
+
+      <Artifacts tasks={tasks} workspacePath={project.workspacePath ?? null} completed={project.status === 'completed'} />
 
       {project.planSummary && (
         <Card title="Plano da coordenadora">

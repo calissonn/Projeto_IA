@@ -140,7 +140,9 @@ export class Engine {
       estimatedCostUsd: null,
       planSummary: null,
       statusReason: null,
+      workspacePath: null,
     };
+    if (this.o.mode === 'real') project.workspacePath = this.o.workspaces.pathFor(project.id);
     this.saveProject(project);
     this.log('info', `Projeto "${project.name}" criado; coordenador iniciando o planejamento`, project.id);
     // Um único coordenador: os planejamentos entram em fila.
@@ -159,7 +161,12 @@ export class Engine {
     this.active.set(coordinator.id, { kind: 'plan', id: workId, projectId, abort });
     this.setAgentState(coordinator.id, 'meeting', { detail: `Planejando "${project.name}"`, projectId });
     try {
-      const plan = validatePlan(await this.o.planner.plan({ name: project.name, description: project.description }, abort.signal));
+      const outcome = await this.o.planner.plan({ name: project.name, description: project.description }, abort.signal);
+      if (outcome.costUsd !== null) {
+        const p = this.requireProject(projectId);
+        this.saveProject({ ...p, costUsd: sumCost(p.costUsd, outcome.costUsd) });
+      }
+      const plan = validatePlan(outcome.plan);
       const current = this.requireProject(projectId);
       if (current.status !== 'planning') return; // cancelado durante o planejamento
 
@@ -221,6 +228,11 @@ export class Engine {
         return;
       }
       const msg = err instanceof Error ? err.message : String(err);
+      const failedCost = (err as { costUsd?: unknown }).costUsd;
+      if (typeof failedCost === 'number') {
+        const p = this.requireProject(projectId);
+        this.saveProject({ ...p, costUsd: sumCost(p.costUsd, failedCost) });
+      }
       const current = this.requireProject(projectId);
       if (current.status === 'planning') this.saveProject({ ...current, status: 'failed', statusReason: `Falha no planejamento: ${msg}` });
       this.log('error', `Falha no planejamento: ${msg}`, projectId);

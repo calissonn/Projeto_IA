@@ -89,6 +89,8 @@ export interface Project {
   estimatedCostUsd: number | null;
   planSummary: string | null;
   statusReason: string | null;
+  /** Pasta onde os agentes trabalham (modo real). null no modo demo. */
+  workspacePath?: string | null;
 }
 
 export const TASK_STATUSES = [

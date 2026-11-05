@@ -1,13 +1,21 @@
 import { Plan, type PlanTask } from '@acc/shared';
+export type { Plan };
 
 export interface PlanRequest {
   name: string;
   description: string;
 }
 
-/** Elabora o plano de um projeto. Demo: regras locais. Real (Etapa 4): Claude via Agent SDK. */
+export interface PlanOutcome {
+  /** Plano bruto: é sempre validado por validatePlan antes de virar tarefas. */
+  plan: unknown;
+  /** Custo do planejamento informado pelo SDK (null no modo demo). */
+  costUsd: number | null;
+}
+
+/** Elabora o plano de um projeto. Demo: regras locais. Real: Claude via Agent SDK. */
 export interface Planner {
-  plan(request: PlanRequest, signal: AbortSignal): Promise<Plan>;
+  plan(request: PlanRequest, signal: AbortSignal): Promise<PlanOutcome>;
 }
 
 export class PlanValidationError extends Error {}

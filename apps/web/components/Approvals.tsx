@@ -36,6 +36,12 @@ function PendingItem({ a }: { a: Approval }) {
       </div>
       <p className="mt-2 font-medium">{a.title}</p>
       <p className="mt-1 whitespace-pre-line text-sm text-slate-300">{a.detail}</p>
+      {a.kind === 'action' && a.payload != null && (
+        <details className="mt-2 text-xs">
+          <summary className="cursor-pointer text-slate-400">Dados técnicos do pedido</summary>
+          <pre className="mt-1 max-h-48 overflow-auto rounded bg-black/40 p-2 text-slate-300">{JSON.stringify(a.payload, null, 2)}</pre>
+        </details>
+      )}
       {rejecting && (
         <label className="mt-3 block text-sm">
           <span className="text-slate-300">Motivo da rejeição (opcional)</span>
