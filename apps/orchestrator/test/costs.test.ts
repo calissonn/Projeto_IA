@@ -50,3 +50,28 @@ describe('pausar tudo', () => {
     await engine.idle();
   });
 });
+
+describe('estimativa calibrada', () => {
+  it('usa o consumo típico até ter execuções reais suficientes, depois a média real', async () => {
+    const { calibratedEstimate, CALIBRATION_MIN_SAMPLES } = await import('../src/costs/estimator.ts');
+    const typical = estimateTaskCost('tester', SONNET);
+    expect(calibratedEstimate('tester', SONNET, [{ role: 'tester', costUsd: 1 }])).toEqual({ value: typical, basis: 'typical', samples: 1 });
+    const history: { role: 'tester' | 'programmer'; costUsd: number | null }[] = Array.from({ length: CALIBRATION_MIN_SAMPLES }, (_, i) => ({ role: 'tester' as const, costUsd: 0.1 * (i + 1) }));
+    history.push({ role: 'programmer', costUsd: 9 }, { role: 'tester', costUsd: null });
+    expect(calibratedEstimate('tester', SONNET, history)).toEqual({ value: 0.2, basis: 'history', samples: 3 });
+  });
+});
+
+describe('desligamento limpo', () => {
+  it('pausa projetos em execução e encerra as execuções', async () => {
+    const { engine, repo } = makeEngine({ speed: 20 });
+    const p = engine.createProject({ name: 'Desligar', description: 'Página institucional com formulário' });
+    const stop = autoApprove(engine, repo);
+    await waitFor(() => repo.listRuns({ status: 'running' })[0], 3000, 'execução');
+    stop();
+    await engine.shutdown(2000);
+    expect(repo.getProject(p.id)!.status).toBe('paused');
+    expect(repo.getProject(p.id)!.statusReason).toMatch(/Orquestrador encerrado/);
+    expect(repo.listRuns({ status: 'running' })).toHaveLength(0);
+  });
+});

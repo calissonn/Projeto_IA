@@ -11,11 +11,14 @@ export function CostsTab() {
   const mode = useAcc((s) => s.mode);
   const list = useMemo(() => Object.values(projects).sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [projects]);
   const byRole = useMemo(() => {
-    const out: Record<string, { estimated: number | null; measured: number | null }> = {};
+    const out: Record<string, { estimated: number | null; measured: number | null; runs: number }> = {};
     for (const t of Object.values(tasks)) {
-      const r = (out[t.role] ??= { estimated: null, measured: null });
+      const r = (out[t.role] ??= { estimated: null, measured: null, runs: 0 });
       if (t.estimatedCostUsd !== null) r.estimated = (r.estimated ?? 0) + t.estimatedCostUsd;
-      if (t.costUsd !== null) r.measured = (r.measured ?? 0) + t.costUsd;
+      if (t.costUsd !== null && t.costUsd > 0 && (t.status === 'done' || t.status === 'failed')) {
+        r.measured = (r.measured ?? 0) + t.costUsd;
+        r.runs++;
+      }
     }
     return out;
   }, [tasks]);
@@ -30,6 +33,9 @@ export function CostsTab() {
           </li>
           <li>
             <strong>Medido</strong>: informado pelo Claude Agent SDK ao final de cada execução. É a estimativa do próprio SDK, não uma fatura.
+          </li>
+          <li>
+            <strong>Calibração</strong>: a partir de 3 tarefas reais concluídas de um cargo, a estimativa dos novos planos passa a usar a média real desse cargo.
           </li>
           <li>Ao atingir o orçamento, o projeto é pausado automaticamente.</li>
           {mode === 'demo' && <li className="text-amber-200">Modo demonstração: nenhuma IA é chamada, portanto não há custo — os valores aparecem como “—”.</li>}
@@ -94,6 +100,12 @@ export function CostsTab() {
               <dt className="text-sm font-medium">{ROLE_LABEL[r]}</dt>
               <dd className="mt-1 text-xs text-slate-400">
                 estimado {formatUsd(byRole[r]?.estimated ?? null)} · medido {formatUsd(byRole[r]?.measured ?? null)}
+                {byRole[r] && byRole[r].runs > 0 && (
+                  <span className="block">
+                    média real: {formatUsd(byRole[r].measured! / byRole[r].runs)} por tarefa ({byRole[r].runs} execuç{byRole[r].runs === 1 ? 'ão' : 'ões'}
+                    {byRole[r].runs >= 3 ? ', usada na estimativa' : ''})
+                  </span>
+                )}
               </dd>
             </div>
           ))}

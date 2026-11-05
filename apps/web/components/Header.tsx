@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAcc } from '@/lib/store';
 
 const NAV = [
@@ -16,8 +16,23 @@ export function Header() {
   const approvals = useAcc((s) => s.approvals);
   const pending = useMemo(() => Object.values(approvals).filter((a) => a.status === 'pending').length, [approvals]);
   const path = usePathname();
+  // Só avisa depois de alguns segundos sem conexão, para não piscar em reconexões rápidas.
+  const [offline, setOffline] = useState(false);
+  useEffect(() => {
+    if (connected) {
+      setOffline(false);
+      return;
+    }
+    const t = setTimeout(() => setOffline(true), 3000);
+    return () => clearTimeout(t);
+  }, [connected]);
   return (
     <>
+      {offline && (
+        <div role="alert" className="bg-rose-700 px-4 py-1.5 text-center text-sm font-semibold text-white" data-testid="offline-banner">
+          Sem conexão com o orquestrador. Tentando reconectar… (ele está rodando? <code className="font-mono">npm run dev</code>)
+        </div>
+      )}
       {mode === 'demo' && (
         <div role="status" className="bg-amber-400 px-4 py-1.5 text-center text-sm font-bold text-amber-950" data-testid="demo-banner">
           MODO DEMONSTRAÇÃO — nada aqui é execução real: nenhuma IA é chamada, nenhum arquivo é criado e nenhum custo é gerado

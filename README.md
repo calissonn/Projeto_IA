@@ -1,9 +1,22 @@
 # AI Command Center
 
-Empresa virtual de desenvolvimento de software: agentes de IA representados por personagens
-pixel art num prédio animado, coordenados por um orquestrador com aprovação humana.
+Empresa virtual de desenvolvimento de software: agentes de IA representados por personagens pixel art num prédio
+animado, coordenados por um orquestrador com aprovação humana. No modo real, os agentes executam o **Claude Code** de verdade.
 
-Arquitetura completa, custos, riscos e plano: **[docs/ARQUITETURA.md](docs/ARQUITETURA.md)**.
+| | |
+|---|---|
+| **[Guia de uso](docs/USO.md)** | instalar, escolher o modo, usar, configurar, API |
+| **[Segurança](docs/SEGURANCA.md)** | modelo de permissões, camadas de proteção e limitações |
+| **[Verificação](docs/VERIFICACAO.md)** | testes automáticos e roteiros manuais |
+| **[Arquitetura](docs/ARQUITETURA.md)** | decisões, componentes, custos e riscos |
+
+## Início rápido
+
+```bash
+npm install
+cp .env.example .env      # defina ACC_TOKEN com um valor aleatório longo
+npm run dev               # http://localhost:3000 (modo demonstração: sem IA, sem custo)
+```
 
 ## Situação
 
@@ -13,7 +26,7 @@ Arquitetura completa, custos, riscos e plano: **[docs/ARQUITETURA.md](docs/ARQUI
 | 2. Prédio animado (Next.js + Phaser) | ✅ concluída |
 | 3. Central de Comando | ✅ concluída |
 | 4. Execução real com Claude Code (Agent SDK) | ✅ concluída (validada com SDK simulado; falta a 1ª execução completa na sua máquina) |
-| 5. Acabamento | ⏳ próxima |
+| 5. Acabamento (robustez, segurança da web, CI, documentação, custos calibrados) | ✅ concluída |
 
 > Há dois modos, escolhidos ao iniciar e nunca misturados: **demonstração** (`ACC_MODE=demo`, padrão: nenhuma IA,
 > nenhum arquivo, nenhum custo) e **real** (`ACC_MODE=real`: os agentes executam o Claude Code de verdade e geram custos).
@@ -22,29 +35,6 @@ Arquitetura completa, custos, riscos e plano: **[docs/ARQUITETURA.md](docs/ARQUI
 ## Requisitos
 
 - Node.js 22.13 ou superior (usa o SQLite embutido do Node).
-
-## Executar
-
-```bash
-npm install
-cp .env.example .env      # defina ACC_TOKEN com um valor aleatório longo (obrigatório para a web)
-npm run dev               # orquestrador (127.0.0.1:4317) + web (http://localhost:3000)
-```
-
-Abra **http://localhost:3000**: o prédio aparece com os agentes ociosos na copa. Crie um projeto no painel
-da direita, aprove o plano na **Fila de aprovação** e acompanhe os personagens trabalhando. Clique num
-personagem (ou no nome dele abaixo do prédio) para abrir o painel com tarefa, tempo, histórico, arquivos,
-testes, erros e os detalhes da execução.
-
-## Testes
-
-```bash
-npm test                  # unitários e de integração (orquestrador + web)
-npm run typecheck
-npm run build && npm run test:e2e   # ponta a ponta no navegador; gera capturas em e2e/screenshots/
-```
-
-O teste ponta a ponta precisa do Playwright com Chromium (`npm i -D playwright && npx playwright install chromium`).
 
 ## Prédio animado (Etapa 2)
 
@@ -72,7 +62,7 @@ tempo real por Server-Sent Events (`/api/stream`).
 
 ## Modo real (Etapa 4)
 
-### Como usar
+Como ativar: [Guia de uso](docs/USO.md#2-escolher-o-modo). Primeira execução: [roteiro](docs/VERIFICACAO.md#manual--modo-real-primeira-execução).
 
 ```bash
 claude login                 # ou defina ANTHROPIC_API_KEY no .env
@@ -100,6 +90,8 @@ Central de Comando e confira os arquivos em `workspaces/<id-do-projeto>/`.
    turnos e concorrência (padrão 1 no modo real). Pausar/cancelar interrompe o processo do Claude Code.
 
 ### Segurança e isolamento
+
+Resumo abaixo; detalhes e limitações em [docs/SEGURANCA.md](docs/SEGURANCA.md).
 
 - Os agentes só têm as ferramentas Read, Write, Edit, Glob, Grep, Bash e TodoWrite — **sem acesso à web**.
 - Configurações do usuário/projeto do Claude Code **não** são carregadas (`settingSources: []`).
@@ -136,50 +128,14 @@ O botão **Pausar todas as execuções** interrompe tudo de uma vez. A aba fica 
 `ACC_PRICE_INPUT_PER_MTOK`/`ACC_PRICE_OUTPUT_PER_MTOK`; padrão Claude Sonnet 5.5: US$ 2 / US$ 10 por milhão de tokens).
 O medido vem do Claude Agent SDK ao fim de cada execução (estimativa do SDK, não fatura). No modo demonstração ambos aparecem como “—”.
 
-## API do orquestrador
+A API do orquestrador (para automações) está documentada no [Guia de uso](docs/USO.md#7-api-do-orquestrador).
 
-Também é possível controlar tudo direto pela API (útil para automações):
+## Acabamento (Etapa 5)
 
-```bash
-TOKEN=o-valor-do-seu-ACC_TOKEN
-H="authorization: Bearer $TOKEN"
-
-# 1. Criar projeto — a coordenadora (Ada) planeja e pede aprovação do plano
-curl -s -H "$H" -H 'content-type: application/json' \
-  -d '{"name":"Portal de clientes","description":"Portal com login e API de pedidos"}' \
-  http://127.0.0.1:4317/api/projects
-
-# 2. Ver estado completo (agentes, projetos, tarefas, aprovações)
-curl -s -H "$H" http://127.0.0.1:4317/api/snapshot
-
-# 3. Aprovar (ou "reject") uma aprovação pendente
-curl -s -H "$H" -H 'content-type: application/json' -d '{"decision":"approve"}' \
-  http://127.0.0.1:4317/api/approvals/<id>
-
-# Pausar / retomar / cancelar
-curl -s -X POST -H "$H" http://127.0.0.1:4317/api/projects/<id>/pause
-```
-
-Inclua `#erro` na descrição do projeto para ver o fluxo de erro (testes falhando) no modo demo.
-
-### Rotas
-
-| Método | Rota | Descrição |
-|---|---|---|
-| GET | `/api/health` | modo atual |
-| GET | `/api/snapshot` | estado completo + último número de sequência |
-| GET | `/api/events?after=&before=&types=&projectId=&agentId=&taskId=&runId=&limit=` | histórico de eventos (`before` pagina para trás) |
-| POST | `/api/projects` | criar projeto `{name, description, budgetUsd?}` |
-| GET | `/api/projects/:id` | projeto, tarefas e aprovações |
-| POST | `/api/projects/:id/pause` · `/resume` · `/cancel` | controle de execução |
-| POST | `/api/pause-all` | pausa todos os projetos em execução |
-| POST | `/api/approvals/:id` | `{decision: "approve" \| "reject", reason?}` |
-| GET | `/api/agents/:id` | agente + histórico de atividades |
-| GET | `/api/runs/:id` | detalhes de uma execução (todos os eventos) |
-| WS | `/ws?token=` | `hello` e depois cada evento em tempo real |
-
-Segurança: o servidor escuta só em `127.0.0.1`, exige token em toda rota e no WebSocket e só aceita a origem
-configurada em `ACC_ALLOWED_ORIGIN`.
+- A web avisa quando perde a conexão e reconecta sozinha; ao encerrar, o orquestrador pausa o que estava rodando.
+- Telas de erro e de página não encontrada; cabeçalhos de segurança (CSP, anti-iframe, nosniff, no-referrer).
+- Estimativa de custo calibrada: com 3 ou mais tarefas reais de um cargo, usa a média real desse cargo.
+- `npm run reset:demo` zera a demonstração; CI no GitHub roda tipos, testes, build e o teste ponta a ponta.
 
 ## Estrutura
 
@@ -189,4 +145,6 @@ apps/orchestrator       servidor HTTP + WebSocket, motor, planejador, executores
   src/claude            integração com o Claude Agent SDK (planejador, executor, ambiente, arquivos alterados)
 apps/web                Next.js + Tailwind + Phaser: prédio, painéis, proxy e stream de eventos
 e2e/                    teste ponta a ponta no navegador e capturas de tela
+scripts/                utilitários (reset da demonstração)
+docs/                   uso, segurança, verificação e arquitetura
 ```

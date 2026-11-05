@@ -62,7 +62,8 @@ const step = async (name, fn) => {
   }
 };
 
-start('orq', 'node', ['--disable-warning=ExperimentalWarning', '--import', 'tsx', 'src/main.ts'], path.join(ROOT, 'apps/orchestrator'));
+const startOrchestrator = () => start('orq', 'node', ['--disable-warning=ExperimentalWarning', '--import', 'tsx', 'src/main.ts'], path.join(ROOT, 'apps/orchestrator'));
+let orq = startOrchestrator();
 start('web', 'npx', ['next', 'start', '-p', WEB_PORT], path.join(ROOT, 'apps/web'));
 
 const browser = await chromium.launch();
@@ -72,6 +73,9 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 980 }, deviceScaleFactor: 1 });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => {
+    if (m.type() === 'error' && /Content Security Policy/i.test(m.text())) errors.push(`CSP: ${m.text()}`);
+  });
 
   const actors = () => page.evaluate(() => window.__acc?.actors() ?? []);
   const actor = async (id) => (await actors()).find((a) => a.id === id);
@@ -254,6 +258,52 @@ try {
     await page.getByTestId('cost-table').getByText('Projeto pausável').waitFor();
     await page.getByText('Modo demonstração: nenhuma IA é chamada', { exact: false }).waitFor();
     await shot('19-custos');
+  });
+
+  // ---------------------------------------------------------------- Acabamento (Etapa 5)
+  await step('cabeçalhos de segurança e página não encontrada', async () => {
+    const res = await fetch(`http://localhost:${WEB_PORT}/command`);
+    const csp = res.headers.get('content-security-policy') ?? '';
+    if (!csp.includes("frame-ancestors 'none'") || res.headers.get('x-frame-options') !== 'DENY') throw new Error('cabeçalhos ausentes');
+    if (res.headers.get('x-powered-by')) throw new Error('x-powered-by exposto');
+    await page.goto(`http://localhost:${WEB_PORT}/andar-inexistente`);
+    await page.getByText('Página não encontrada').waitFor();
+  });
+
+  await step('orquestrador cai durante uma execução: desligamento limpo, aviso na web e reconexão', async () => {
+    await page.goto(`http://localhost:${WEB_PORT}/command`);
+    await page.getByTestId('kpis').waitFor();
+    await page.getByPlaceholder('Portal de clientes').fill('Projeto interrompido');
+    await page.getByPlaceholder('Portal com login, lista de pedidos e API').fill('Página simples para testar a queda do orquestrador');
+    await page.getByRole('button', { name: 'Criar projeto' }).click();
+    await tab('Aprovações');
+    const item = page.getByTestId('approvals').locator('li', { hasText: 'Projeto interrompido' });
+    await item.waitFor({ timeout: 20000 });
+    await item.getByRole('button', { name: 'Aprovar' }).click();
+    await tab('Agentes');
+    await page.getByTestId('agent-cards').getByText('Escrevendo código').or(page.getByTestId('agent-cards').getByText('Analisando')).first().waitFor({ timeout: 20000 });
+
+    process.kill(-orq.pid, 'SIGTERM');
+    await new Promise((r) => orq.once('exit', r));
+    await page.getByTestId('offline-banner').waitFor({ timeout: 15000 });
+    await shot('21-sem-conexao');
+
+    orq = startOrchestrator();
+    procs.push(orq);
+    await page.getByTestId('offline-banner').waitFor({ state: 'detached', timeout: 30000 });
+    await page.getByTestId('connection').getByText('Conectado ao orquestrador').waitFor();
+    await tab('Projetos');
+    const row = page.getByTestId('project-list').locator('li', { hasText: 'Projeto interrompido' });
+    await row.getByText('Pausado').waitFor();
+    await page.getByTestId('project-list').getByText('Portal de clientes').waitFor();
+    await tab('Agentes');
+    // Nenhum agente aparece trabalhando depois da queda.
+    if ((await page.getByTestId('agent-cards').getByText('Escrevendo código').count()) > 0) throw new Error('agente aparece trabalhando sem execução');
+    await shot('22-reconectado');
+    await tab('Projetos');
+    await row.getByRole('button', { name: /Retomar/ }).click();
+    await row.getByText('Em execução').waitFor();
+    await row.getByRole('button', { name: 'Cancelar' }).click();
   });
 
   await step('celular: prédio e Central de Comando sem rolagem horizontal', async () => {

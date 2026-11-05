@@ -26,3 +26,23 @@ export function estimateTaskCost(role: WorkerRole, prices: Prices): number {
 export function round(v: number): number {
   return Math.round(v * 10000) / 10000;
 }
+
+/** Mínimo de execuções reais de um cargo para usar a média em vez do consumo típico. */
+export const CALIBRATION_MIN_SAMPLES = 3;
+
+export interface CostSample {
+  role: WorkerRole;
+  costUsd: number | null;
+}
+
+/**
+ * Estimativa calibrada: com execuções reais suficientes do cargo, usa a média do custo medido;
+ * senão, o consumo típico × preço do modelo.
+ */
+export function calibratedEstimate(role: WorkerRole, prices: Prices, history: CostSample[]): { value: number; basis: 'history' | 'typical'; samples: number } {
+  const costs = history.filter((h) => h.role === role && h.costUsd !== null && h.costUsd > 0).map((h) => h.costUsd!);
+  if (costs.length >= CALIBRATION_MIN_SAMPLES) {
+    return { value: round(costs.reduce((a, b) => a + b, 0) / costs.length), basis: 'history', samples: costs.length };
+  }
+  return { value: estimateTaskCost(role, prices), basis: 'typical', samples: costs.length };
+}

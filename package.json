@@ -1,7 +1,7 @@
 {
   "name": "ai-command-center",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.5.0",
   "type": "module",
   "workspaces": [
     "packages/*",
@@ -17,7 +17,8 @@
     "build": "npm run build -w @acc/web",
     "test": "npm test --workspaces --if-present",
     "test:e2e": "node e2e/run.mjs",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "reset:demo": "node scripts/reset-demo.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",

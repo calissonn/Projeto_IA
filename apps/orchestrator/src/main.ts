@@ -29,8 +29,12 @@ server.listen(config.port, config.host, () => {
   }
 });
 
+let closing = false;
 async function shutdown() {
-  console.log('\nEncerrando…');
+  if (closing) return;
+  closing = true;
+  console.log('\nEncerrando… (pausando execuções em andamento)');
+  await engine.shutdown();
   await close();
   repo.close();
   process.exit(0);

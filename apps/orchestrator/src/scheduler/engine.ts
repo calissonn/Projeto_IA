@@ -116,6 +116,18 @@ export class Engine {
     };
   }
 
+  /**
+   * Desligamento limpo: pausa os projetos em execução (o que interrompe os agentes) e espera
+   * as execuções registrarem o encerramento, até o tempo limite.
+   */
+  async shutdown(timeoutMs = 10000): Promise<void> {
+    for (const p of this.o.repo.listProjects()) {
+      if (p.status === 'running') this.pauseProject(p.id, 'Orquestrador encerrado; retome quando ele voltar');
+    }
+    for (const w of this.active.values()) w.abort.abort();
+    await Promise.race([this.idle(), new Promise((r) => setTimeout(r, timeoutMs))]);
+  }
+
   /** Aguarda tudo que estiver em andamento (usado em testes e no desligamento). */
   async idle(): Promise<void> {
     while (this.running.size) await Promise.allSettled([...this.running]);
