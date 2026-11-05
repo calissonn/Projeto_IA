@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Tipos
+        run: npm run typecheck
+      - name: Testes unitários e de integração (sem IA, SDK simulado)
+        run: npm test
+      - name: Build da web
+        run: npm run build
+      - name: Navegador para o teste ponta a ponta
+        run: |
+          npm i --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Teste ponta a ponta (modo demonstração)
+        run: npm run test:e2e
+      - name: Capturas de tela
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capturas
+          path: e2e/screenshots/

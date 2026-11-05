@@ -1,12 +1,38 @@
 'use client';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 import { useAcc } from '@/lib/store';
+
+const NAV = [
+  { href: '/', label: 'Prédio' },
+  { href: '/command', label: 'Central de Comando' },
+];
 
 export function Header() {
   const mode = useAcc((s) => s.mode);
   const connected = useAcc((s) => s.connected);
   const synced = useAcc((s) => s.synced);
+  const approvals = useAcc((s) => s.approvals);
+  const pending = useMemo(() => Object.values(approvals).filter((a) => a.status === 'pending').length, [approvals]);
+  const path = usePathname();
+  // Só avisa depois de alguns segundos sem conexão, para não piscar em reconexões rápidas.
+  const [offline, setOffline] = useState(false);
+  useEffect(() => {
+    if (connected) {
+      setOffline(false);
+      return;
+    }
+    const t = setTimeout(() => setOffline(true), 3000);
+    return () => clearTimeout(t);
+  }, [connected]);
   return (
     <>
+      {offline && (
+        <div role="alert" className="bg-rose-700 px-4 py-1.5 text-center text-sm font-semibold text-white" data-testid="offline-banner">
+          Sem conexão com o orquestrador. Tentando reconectar… (ele está rodando? <code className="font-mono">npm run dev</code>)
+        </div>
+      )}
       {mode === 'demo' && (
         <div role="status" className="bg-amber-400 px-4 py-1.5 text-center text-sm font-bold text-amber-950" data-testid="demo-banner">
           MODO DEMONSTRAÇÃO — nada aqui é execução real: nenhuma IA é chamada, nenhum arquivo é criado e nenhum custo é gerado
@@ -25,6 +51,22 @@ export function Header() {
             <p className="text-xs text-slate-400">Empresa virtual de agentes de IA com supervisão humana</p>
           </div>
         </div>
+        <nav className="flex items-center gap-1 rounded-lg border border-line bg-panel p-1 text-sm" aria-label="Navegação principal">
+          {NAV.map((n) => {
+            const active = n.href === '/' ? path === '/' : path.startsWith(n.href);
+            return (
+              <Link
+                key={n.href}
+                href={n.href}
+                aria-current={active ? 'page' : undefined}
+                className={`rounded-md px-3 py-1.5 font-medium transition ${active ? 'bg-teal-500/20 text-teal-200' : 'text-slate-300 hover:bg-slate-700/40'}`}
+              >
+                {n.label}
+                {n.href === '/command' && pending > 0 && <span className="ml-1.5 rounded bg-amber-400 px-1.5 text-xs font-bold text-amber-950">{pending}</span>}
+              </Link>
+            );
+          })}
+        </nav>
         <div className="flex items-center gap-2 text-xs" data-testid="connection">
           <span className={`h-2.5 w-2.5 rounded-full ${connected && synced ? 'bg-emerald-400' : connected ? 'bg-amber-400' : 'bg-rose-500'}`} />
           {connected && synced ? 'Conectado ao orquestrador' : connected ? 'Sincronizando…' : 'Sem conexão com o orquestrador'}

@@ -39,3 +39,14 @@ describe('repositório SQLite', () => {
     expect(repo.listProjects()).toHaveLength(0);
   });
 });
+
+describe('paginação e filtros do histórico', () => {
+  it('"before" devolve os mais recentes antes do limite, em ordem crescente; "types" filtra', () => {
+    const repo = openSqlite(':memory:');
+    const base = { ts: 'x', source: 'demo' as const, projectId: null, agentId: null, taskId: null, runId: null };
+    for (let i = 1; i <= 10; i++) repo.appendEvent({ ...base, type: 'log', level: 'info', message: String(i) });
+    repo.appendEvent({ ...base, type: 'run.activity', activity: { kind: 'tool', state: 'typing', summary: 's', tool: 'Edit', detail: null } });
+    expect(repo.listEvents({ before: 8, limit: 3 }).map((e) => e.seq)).toEqual([5, 6, 7]);
+    expect(repo.listEvents({ types: ['run.activity'] }).map((e) => e.type)).toEqual(['run.activity']);
+  });
+});

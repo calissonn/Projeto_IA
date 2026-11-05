@@ -14,7 +14,21 @@ export function selectAgent(id: string | null) {
   accStore.setState({ selectedAgentId: id });
 }
 
+/**
+ * Transporte entre a interface e o orquestrador. Padrão: HTTP + SSE via servidor Next.
+ * A versão para celular (standalone) troca por um orquestrador que roda no próprio navegador.
+ */
+export interface Transport {
+  api<T>(path: string, body?: unknown): Promise<T>;
+  startSync(): () => void;
+}
+let transport: Transport | null = null;
+export function setTransport(t: Transport) {
+  transport = t;
+}
+
 export async function api<T>(path: string, body?: unknown): Promise<T> {
+  if (transport) return transport.api<T>(path, body);
   const res = await fetch(`/api/acc/${path}`, {
     method: body === undefined ? 'GET' : 'POST',
     headers: { 'content-type': 'application/json' },
@@ -31,6 +45,7 @@ export async function api<T>(path: string, body?: unknown): Promise<T> {
  * Se faltar algum número de sequência, recarrega o snapshot.
  */
 export function startSync(): () => void {
+  if (transport) return transport.startSync();
   let buffer: AccEvent[] = [];
   let loading = false;
   let stopped = false;

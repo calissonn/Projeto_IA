@@ -106,6 +106,14 @@ export function openSqlite(file: string): Repository {
     listEvents(q: EventQuery = {}) {
       const clauses = ['seq > ?'];
       const params: (string | number)[] = [q.after ?? 0];
+      if (q.before !== undefined) {
+        clauses.push('seq < ?');
+        params.push(q.before);
+      }
+      if (q.types?.length) {
+        clauses.push(`type IN (${q.types.map(() => '?').join(',')})`);
+        params.push(...q.types);
+      }
       const cols: [keyof EventQuery, string][] = [
         ['projectId', 'project_id'],
         ['agentId', 'agent_id'],
@@ -120,9 +128,11 @@ export function openSqlite(file: string): Repository {
         }
       }
       const limit = Math.min(Math.max(q.limit ?? 1000, 1), 5000);
-      const rows = db
-        .prepare(`SELECT seq, data FROM events WHERE ${clauses.join(' AND ')} ORDER BY seq LIMIT ${limit}`)
-        .all(...params) as { seq: number; data: string }[];
+      // Com "before", pega os mais recentes antes do limite e devolve em ordem crescente.
+      const order = q.before !== undefined ? 'DESC' : 'ASC';
+      const rows = (
+        db.prepare(`SELECT seq, data FROM events WHERE ${clauses.join(' AND ')} ORDER BY seq ${order} LIMIT ${limit}`).all(...params) as { seq: number; data: string }[]
+      ).sort((a, b) => a.seq - b.seq);
       return rows.map((r) => ({ ...(JSON.parse(r.data) as UnsequencedEvent), seq: r.seq }) as AccEvent);
     },
     lastSeq() {

@@ -62,7 +62,8 @@ const step = async (name, fn) => {
   }
 };
 
-start('orq', 'node', ['--disable-warning=ExperimentalWarning', '--import', 'tsx', 'src/main.ts'], path.join(ROOT, 'apps/orchestrator'));
+const startOrchestrator = () => start('orq', 'node', ['--disable-warning=ExperimentalWarning', '--import', 'tsx', 'src/main.ts'], path.join(ROOT, 'apps/orchestrator'));
+let orq = startOrchestrator();
 start('web', 'npx', ['next', 'start', '-p', WEB_PORT], path.join(ROOT, 'apps/web'));
 
 const browser = await chromium.launch();
@@ -72,6 +73,9 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 980 }, deviceScaleFactor: 1 });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => {
+    if (m.type() === 'error' && /Content Security Policy/i.test(m.text())) errors.push(`CSP: ${m.text()}`);
+  });
 
   const actors = () => page.evaluate(() => window.__acc?.actors() ?? []);
   const actor = async (id) => (await actors()).find((a) => a.id === id);
@@ -126,7 +130,17 @@ try {
   });
 
   await step('programador recebe o resultado da designer (conversa no 3º andar) e depois pede aprovação', async () => {
-    await waitActor('ag-programmer', (a) => a.state === 'talking' && a.floor === 3 && a.pose === 'talk', 'programador conversando no andar da designer');
+    // Chegou ao andar da designer durante a conversa (pode ainda estar andando até ela).
+    {
+      const end = Date.now() + 40000;
+      let last;
+      while (Date.now() < end) {
+        last = await actor('ag-programmer');
+        if (last.state === 'talking' && last.floor === 3) break;
+        await page.waitForTimeout(100);
+      }
+      if (!(last.state === 'talking' && last.floor === 3)) throw new Error(`programador conversando no andar da designer: ${JSON.stringify(last)}`);
+    }
     await shot('05-repasse-entre-agentes');
     await waitActor('ag-programmer', (a) => a.state === 'awaiting_approval' && a.pose === 'raise' && a.badge === 'alert' && a.floor === 4, 'programador pedindo aprovação');
     await page.getByTestId('approvals').getByText('Instalar dependência').waitFor();
@@ -177,13 +191,144 @@ try {
     await shot('11-erro');
   });
 
-  await step('celular: layout sem rolagem horizontal', async () => {
+  // ---------------------------------------------------------------- Central de Comando (Etapa 3)
+  const tab = (name) => page.getByRole('tab', { name: new RegExp(`^${name}`) }).click();
+
+  await step('Central de Comando: indicadores e projetos existentes', async () => {
+    await page.getByRole('link', { name: /Central de Comando/ }).click();
+    await page.getByTestId('kpis').waitFor();
+    await page.getByTestId('project-list').getByText('Portal de clientes').waitFor();
+    await page.getByTestId('project-list').getByText('Projeto com erro').waitFor();
+    await page.getByTestId('kpis').getByText('modo demonstração: sem custo').first().waitFor();
+    await shot('13-central-projetos');
+  });
+
+  await step('Central de Comando: aba de erros mostra a tarefa que falhou', async () => {
+    await tab('Erros');
+    await page.getByTestId('error-list').getByText('2 de 12 testes falharam', { exact: false }).first().waitFor();
+    await shot('14-central-erros');
+  });
+
+  await step('rejeitar um plano com motivo e ver no histórico de aprovações', async () => {
+    await tab('Projetos');
+    await page.getByPlaceholder('Portal de clientes').fill('Projeto rejeitado');
+    await page.getByPlaceholder('Portal com login, lista de pedidos e API').fill('Página simples que será rejeitada no plano');
+    await page.getByRole('button', { name: 'Criar projeto' }).click();
+    await tab('Aprovações');
+    const item = page.getByTestId('approvals').locator('li', { hasText: 'Projeto rejeitado' });
+    await item.waitFor({ timeout: 20000 });
+    await item.getByRole('button', { name: 'Rejeitar' }).click();
+    await item.getByPlaceholder('Ex.: escopo errado', { exact: false }).fill('Escopo errado para o teste');
+    await item.getByRole('button', { name: 'Confirmar rejeição' }).click();
+    await page.getByTestId('approval-history').getByText('Escopo errado para o teste').waitFor();
+    await shot('15-central-aprovacoes');
+  });
+
+  await step('pausar, retomar e cancelar um projeto pela interface', async () => {
+    await tab('Projetos');
+    await page.getByPlaceholder('Portal de clientes').fill('Projeto pausável');
+    await page.getByPlaceholder('Portal com login, lista de pedidos e API').fill('Página simples para testar pausa e retomada');
+    await page.getByRole('button', { name: 'Criar projeto' }).click();
+    await tab('Aprovações');
+    const item = page.getByTestId('approvals').locator('li', { hasText: 'Projeto pausável' });
+    await item.waitFor({ timeout: 20000 });
+    await item.getByRole('button', { name: 'Aprovar' }).click();
+    await tab('Projetos');
+    await page.getByTestId('project-list').getByRole('link', { name: 'Projeto pausável' }).click();
+    const detail = page.getByTestId('project-detail');
+    await detail.getByTestId('task-table').getByText('Executando').waitFor({ timeout: 20000 });
+    await detail.getByRole('button', { name: /Pausar/ }).click();
+    await detail.getByText('Pausado pelo administrador').waitFor();
+    await detail.getByTestId('task-table').getByText('Executando').waitFor({ state: 'detached' });
+    await shot('16-projeto-pausado');
+    await detail.getByRole('button', { name: /Retomar/ }).click();
+    await detail.getByTestId('task-table').getByText('Executando').waitFor({ timeout: 20000 });
+    await detail.getByRole('button', { name: 'Detalhes' }).first().click();
+    await detail.getByText('Critérios de aceite').waitFor();
+    await shot('17-detalhe-do-projeto');
+    await detail.getByRole('button', { name: 'Cancelar' }).click();
+    await detail.getByRole('button', { name: 'Toque de novo para cancelar' }).click();
+    await detail.getByText('Cancelado pelo administrador').waitFor();
+  });
+
+  await step('histórico e logs com filtros', async () => {
+    await page.goto(`http://localhost:${WEB_PORT}/command#logs`);
+    const list = page.getByTestId('log-list');
+    await list.waitFor();
+    await page.getByLabel('Categoria').selectOption('approvals');
+    await list.getByText('Aprovação recusada', { exact: false }).first().waitFor();
+    await page.getByLabel('Buscar').fill('Projeto pausável');
+    await list.getByText('Projeto pausável', { exact: false }).first().waitFor();
+    if ((await list.getByText('Projeto rejeitado', { exact: false }).count()) > 0) throw new Error('filtro de texto não aplicado');
+    await shot('18-logs');
+  });
+
+  await step('custos: tabela por projeto e explicação do cálculo', async () => {
+    await tab('Custos');
+    await page.getByTestId('cost-table').getByText('Projeto pausável').waitFor();
+    await page.getByText('Modo demonstração: nenhuma IA é chamada', { exact: false }).waitFor();
+    await shot('19-custos');
+  });
+
+  // ---------------------------------------------------------------- Acabamento (Etapa 5)
+  await step('cabeçalhos de segurança e página não encontrada', async () => {
+    const res = await fetch(`http://localhost:${WEB_PORT}/command`);
+    const csp = res.headers.get('content-security-policy') ?? '';
+    if (!csp.includes("frame-ancestors 'none'") || res.headers.get('x-frame-options') !== 'DENY') throw new Error('cabeçalhos ausentes');
+    if (res.headers.get('x-powered-by')) throw new Error('x-powered-by exposto');
+    await page.goto(`http://localhost:${WEB_PORT}/andar-inexistente`);
+    await page.getByText('Página não encontrada').waitFor();
+  });
+
+  await step('orquestrador cai durante uma execução: desligamento limpo, aviso na web e reconexão', async () => {
+    await page.goto(`http://localhost:${WEB_PORT}/command`);
+    await page.getByTestId('kpis').waitFor();
+    await page.getByPlaceholder('Portal de clientes').fill('Projeto interrompido');
+    await page.getByPlaceholder('Portal com login, lista de pedidos e API').fill('Página simples para testar a queda do orquestrador');
+    await page.getByRole('button', { name: 'Criar projeto' }).click();
+    await tab('Aprovações');
+    const item = page.getByTestId('approvals').locator('li', { hasText: 'Projeto interrompido' });
+    await item.waitFor({ timeout: 20000 });
+    await item.getByRole('button', { name: 'Aprovar' }).click();
+    await tab('Agentes');
+    await page.getByTestId('agent-cards').getByText('Escrevendo código').or(page.getByTestId('agent-cards').getByText('Analisando')).first().waitFor({ timeout: 20000 });
+
+    process.kill(-orq.pid, 'SIGTERM');
+    await new Promise((r) => orq.once('exit', r));
+    await page.getByTestId('offline-banner').waitFor({ timeout: 15000 });
+    await shot('21-sem-conexao');
+
+    orq = startOrchestrator();
+    procs.push(orq);
+    await page.getByTestId('offline-banner').waitFor({ state: 'detached', timeout: 30000 });
+    await page.getByTestId('connection').getByText('Conectado ao orquestrador').waitFor();
+    await tab('Projetos');
+    const row = page.getByTestId('project-list').locator('li', { hasText: 'Projeto interrompido' });
+    await row.getByText('Pausado').waitFor();
+    await page.getByTestId('project-list').getByText('Portal de clientes').waitFor();
+    await tab('Agentes');
+    // Nenhum agente aparece trabalhando depois da queda.
+    if ((await page.getByTestId('agent-cards').getByText('Escrevendo código').count()) > 0) throw new Error('agente aparece trabalhando sem execução');
+    await shot('22-reconectado');
+    await tab('Projetos');
+    await row.getByRole('button', { name: /Retomar/ }).click();
+    await row.getByText('Em execução').waitFor();
+    await row.getByRole('button', { name: 'Cancelar' }).click();
+    await row.getByRole('button', { name: 'Toque de novo para cancelar' }).click();
+  });
+
+  await step('celular: prédio e Central de Comando sem rolagem horizontal', async () => {
     const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
     await mobile.goto(`http://localhost:${WEB_PORT}/`);
     await mobile.waitForFunction(() => (window.__acc?.actors().length ?? 0) === 4, null, { timeout: 20000 });
     const overflow = await mobile.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     if (overflow > 0) throw new Error(`rolagem horizontal de ${overflow}px`);
     await mobile.screenshot({ path: path.join(SHOTS, '12-celular.png') });
+    await mobile.goto(`http://localhost:${WEB_PORT}/command`);
+    await mobile.getByTestId('kpis').waitFor();
+    const overflow2 = await mobile.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    if (overflow2 > 0) throw new Error(`rolagem horizontal de ${overflow2}px na Central de Comando`);
+    await mobile.screenshot({ path: path.join(SHOTS, '20-central-celular.png') });
     await mobile.close();
   });
 

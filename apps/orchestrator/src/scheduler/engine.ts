@@ -32,6 +32,8 @@ export interface EngineOptions {
   ids: IdGen;
   maxConcurrency: number;
   projectBudgetUsd: number;
+  /** Estimativa de custo por tarefa antes da execução (null = não estimar, ex.: modo demo). */
+  estimateTask?: (role: Task['role']) => number | null;
 }
 
 export class EngineError extends Error {
@@ -114,6 +116,18 @@ export class Engine {
     };
   }
 
+  /**
+   * Desligamento limpo: pausa os projetos em execução (o que interrompe os agentes) e espera
+   * as execuções registrarem o encerramento, até o tempo limite.
+   */
+  async shutdown(timeoutMs = 10000): Promise<void> {
+    for (const p of this.o.repo.listProjects()) {
+      if (p.status === 'running') this.pauseProject(p.id, 'Orquestrador encerrado; retome quando ele voltar');
+    }
+    for (const w of this.active.values()) w.abort.abort();
+    await Promise.race([this.idle(), new Promise((r) => setTimeout(r, timeoutMs))]);
+  }
+
   /** Aguarda tudo que estiver em andamento (usado em testes e no desligamento). */
   async idle(): Promise<void> {
     while (this.running.size) await Promise.allSettled([...this.running]);
@@ -138,7 +152,9 @@ export class Engine {
       estimatedCostUsd: null,
       planSummary: null,
       statusReason: null,
+      workspacePath: null,
     };
+    if (this.o.mode === 'real') project.workspacePath = this.o.workspaces.pathFor(project.id);
     this.saveProject(project);
     this.log('info', `Projeto "${project.name}" criado; coordenador iniciando o planejamento`, project.id);
     // Um único coordenador: os planejamentos entram em fila.
@@ -157,11 +173,18 @@ export class Engine {
     this.active.set(coordinator.id, { kind: 'plan', id: workId, projectId, abort });
     this.setAgentState(coordinator.id, 'meeting', { detail: `Planejando "${project.name}"`, projectId });
     try {
-      const plan = validatePlan(await this.o.planner.plan({ name: project.name, description: project.description }, abort.signal));
+      const outcome = await this.o.planner.plan({ name: project.name, description: project.description }, abort.signal);
+      if (outcome.costUsd !== null) {
+        const p = this.requireProject(projectId);
+        this.saveProject({ ...p, costUsd: sumCost(p.costUsd, outcome.costUsd) });
+      }
+      const plan = validatePlan(outcome.plan);
       const current = this.requireProject(projectId);
       if (current.status !== 'planning') return; // cancelado durante o planejamento
 
       const keyToId = new Map(plan.tasks.map((t) => [t.key, this.o.ids('tsk')]));
+      const estimates = plan.tasks.map((t) => this.o.estimateTask?.(t.role) ?? null);
+      const estimatedTotal = estimates.every((e) => e === null) ? null : estimates.reduce<number>((s, e) => s + (e ?? 0), 0);
       this.o.repo.transaction(() => {
         plan.tasks.forEach((pt, order) => {
           this.saveTask({
@@ -180,14 +203,14 @@ export class Engine {
             startedAt: null,
             finishedAt: null,
             costUsd: null,
-            estimatedCostUsd: null,
+            estimatedCostUsd: estimates[order] ?? null,
             filesChanged: [],
             tests: null,
             summary: null,
             error: null,
           });
         });
-        this.saveProject({ ...current, status: 'awaiting_plan_approval', planSummary: plan.summary });
+        this.saveProject({ ...current, status: 'awaiting_plan_approval', planSummary: plan.summary, estimatedCostUsd: estimatedTotal });
         this.saveApproval({
           id: this.o.ids('apr'),
           projectId,
@@ -196,7 +219,10 @@ export class Engine {
           kind: 'plan',
           category: 'plan',
           title: `Aprovar plano de "${project.name}"`,
-          detail: `${plan.summary}\n\n` + plan.tasks.map((t, i) => `${i + 1}. [${t.role}] ${t.title}`).join('\n'),
+          detail:
+            `${plan.summary}\n\n` +
+            plan.tasks.map((t, i) => `${i + 1}. [${t.role}] ${t.title}`).join('\n') +
+            (estimatedTotal !== null ? `\n\nCusto estimado: US$ ${estimatedTotal.toFixed(2)} (orçamento US$ ${project.budgetUsd.toFixed(2)})` : ''),
           payload: plan,
           status: 'pending',
           createdAt: this.now(),
@@ -214,6 +240,11 @@ export class Engine {
         return;
       }
       const msg = err instanceof Error ? err.message : String(err);
+      const failedCost = (err as { costUsd?: unknown }).costUsd;
+      if (typeof failedCost === 'number') {
+        const p = this.requireProject(projectId);
+        this.saveProject({ ...p, costUsd: sumCost(p.costUsd, failedCost) });
+      }
       const current = this.requireProject(projectId);
       if (current.status === 'planning') this.saveProject({ ...current, status: 'failed', statusReason: `Falha no planejamento: ${msg}` });
       this.log('error', `Falha no planejamento: ${msg}`, projectId);
@@ -232,6 +263,14 @@ export class Engine {
     this.abortProjectWork(projectId, reason);
     this.log('warn', `Projeto pausado: ${reason}`, projectId);
     return paused;
+  }
+
+  /** Pausa todas as execuções em andamento. */
+  pauseAll(reason = 'Todas as execuções pausadas pelo administrador'): Project[] {
+    return this.o.repo
+      .listProjects()
+      .filter((p) => p.status === 'running')
+      .map((p) => this.pauseProject(p.id, reason));
   }
 
   resumeProject(projectId: string): Project {

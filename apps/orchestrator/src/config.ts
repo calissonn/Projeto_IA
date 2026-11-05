@@ -16,6 +16,14 @@ export interface Config {
   model: string;
   taskBudgetUsd: number;
   projectBudgetUsd: number;
+  /** Preço do modelo (US$ por milhão de tokens) para a estimativa de custo. */
+  priceInputPerMTok: number;
+  priceOutputPerMTok: number;
+  /** Modo real: limite de turnos por tarefa, orçamento do planejamento e sandbox do Bash. */
+  maxTurns: number;
+  planBudgetUsd: number;
+  sandbox: 'auto' | 'required' | 'off';
+  claudePath: string | undefined;
 }
 
 const ROOT = path.resolve(import.meta.dirname, '../../..');
@@ -25,6 +33,12 @@ function num(value: string | undefined, fallback: number, name: string, min = 0)
   const n = Number(value);
   if (!Number.isFinite(n) || n <= min) throw new Error(`${name} inválido: "${value}"`);
   return n;
+}
+
+function sandboxMode(v: string | undefined): Config['sandbox'] {
+  const mode = (v ?? 'auto').toLowerCase();
+  if (mode === 'auto' || mode === 'required' || mode === 'off') return mode;
+  throw new Error('ACC_SANDBOX deve ser "auto", "required" ou "off"');
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -49,5 +63,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     model: env.ACC_MODEL ?? 'sonnet',
     taskBudgetUsd: num(env.ACC_TASK_BUDGET_USD, 0.5, 'ACC_TASK_BUDGET_USD'),
     projectBudgetUsd: num(env.ACC_PROJECT_BUDGET_USD, 2, 'ACC_PROJECT_BUDGET_USD'),
+    // Padrão: Claude Sonnet 5.5 (US$ 2 entrada / US$ 10 saída por milhão de tokens).
+    priceInputPerMTok: num(env.ACC_PRICE_INPUT_PER_MTOK, 2, 'ACC_PRICE_INPUT_PER_MTOK'),
+    priceOutputPerMTok: num(env.ACC_PRICE_OUTPUT_PER_MTOK, 10, 'ACC_PRICE_OUTPUT_PER_MTOK'),
+    maxTurns: Math.floor(num(env.ACC_MAX_TURNS, 40, 'ACC_MAX_TURNS')),
+    planBudgetUsd: num(env.ACC_PLAN_BUDGET_USD, 0.3, 'ACC_PLAN_BUDGET_USD'),
+    sandbox: sandboxMode(env.ACC_SANDBOX),
+    claudePath: env.ACC_CLAUDE_PATH || undefined,
   };
 }

@@ -46,7 +46,7 @@ export class DemoRunner implements Runner {
     const forceError = ctx.project.description.includes('#erro');
     try {
       // Repasse de contexto: o agente fica "conversando" com quem fez a tarefa anterior.
-      if (ctx.dependencies.length) await sleep(4500 / this.speed, ctx.signal);
+      if (ctx.dependencies.length) await sleep(6000 / this.speed, ctx.signal);
       for (const [i, step] of SCRIPTS[ctx.task.role].entries()) {
         ctx.report({ kind: 'tool', state: step.state, tool: step.tool, summary: step.summary, detail: { demo: true } });
         await sleep(step.ms / this.speed, ctx.signal);

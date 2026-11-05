@@ -1,7 +1,7 @@
 # AI Command Center — Proposta de arquitetura do MVP
 
 > **Status: aprovada.** Decisões: repositório próprio, SQLite no MVP (Supabase depois), Sonnet como modelo padrão
-> do modo real. Etapa 1 implementada — ver [README](../README.md).
+> do modo real. Etapas 1 a 5 implementadas — ver [README](../README.md).
 
 ---
 

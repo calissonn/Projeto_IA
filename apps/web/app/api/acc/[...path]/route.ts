@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 
 // Somente as rotas conhecidas do orquestrador são repassadas.
 const ALLOWED_GET = /^(health|snapshot|events|projects\/[\w-]+|agents\/[\w-]+|runs\/[\w-]+)$/;
-const ALLOWED_POST = /^(projects|projects\/[\w-]+\/(pause|resume|cancel)|approvals\/[\w-]+)$/;
+const ALLOWED_POST = /^(pause-all|projects|projects\/[\w-]+\/(pause|resume|cancel)|approvals\/[\w-]+)$/;
 
 type Ctx = { params: Promise<{ path: string[] }> };
 

@@ -61,6 +61,8 @@ export function createAccServer(o: ServerOptions): { server: Server; close: () =
       ({ url }) =>
         repo.listEvents({
           after: Number(url.searchParams.get('after') ?? 0) || 0,
+          before: url.searchParams.get('before') ? Number(url.searchParams.get('before')) || undefined : undefined,
+          types: url.searchParams.get('types')?.split(',').filter(Boolean),
           projectId: url.searchParams.get('projectId') ?? undefined,
           agentId: url.searchParams.get('agentId') ?? undefined,
           taskId: url.searchParams.get('taskId') ?? undefined,
@@ -78,6 +80,7 @@ export function createAccServer(o: ServerOptions): { server: Server; close: () =
         return { project, tasks: repo.listTasks(project.id), approvals: repo.listApprovals({ projectId: project.id }) };
       },
     ],
+    ['POST', /^\/api\/pause-all$/, () => ({ paused: engine.pauseAll() })],
     ['POST', /^\/api\/projects\/([\w-]+)\/pause$/, ({ params }) => engine.pauseProject(params[0]!)],
     ['POST', /^\/api\/projects\/([\w-]+)\/resume$/, ({ params }) => engine.resumeProject(params[0]!)],
     ['POST', /^\/api\/projects\/([\w-]+)\/cancel$/, ({ params }) => engine.cancelProject(params[0]!)],

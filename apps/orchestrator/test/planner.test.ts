@@ -26,12 +26,12 @@ describe('validação do plano', () => {
 describe('planejador demo', () => {
   const signal = new AbortController().signal;
   it('gera plano válido e identificado como demonstração', async () => {
-    const plan = validatePlan(await new DemoPlanner(1000).plan({ name: 'Site', description: 'Uma página institucional simples' }, signal));
+    const plan = validatePlan((await new DemoPlanner(1000).plan({ name: 'Site', description: 'Uma página institucional simples' }, signal)).plan);
     expect(plan.summary).toContain('DEMONSTRAÇÃO');
     expect(plan.tasks.map((x) => x.role)).toEqual(['designer', 'programmer', 'tester']);
   });
   it('inclui backend quando a descrição pede', async () => {
-    const plan = validatePlan(await new DemoPlanner(1000).plan({ name: 'Loja', description: 'Loja com login e API de pedidos' }, signal));
+    const plan = validatePlan((await new DemoPlanner(1000).plan({ name: 'Loja', description: 'Loja com login e API de pedidos' }, signal)).plan);
     expect(plan.tasks.find((x) => x.key === 'backend')?.role).toBe('programmer');
     expect(plan.tasks.find((x) => x.key === 'frontend')?.dependsOn).toEqual(['layout', 'backend']);
   });

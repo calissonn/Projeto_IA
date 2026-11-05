@@ -1,6 +1,6 @@
 import type { Plan, PlanTask } from '@acc/shared';
 import { sleep } from '../util/runtime.ts';
-import type { PlanRequest, Planner } from './planner.ts';
+import type { PlanOutcome, PlanRequest, Planner } from './planner.ts';
 
 /**
  * Planejador do MODO DEMONSTRAÇÃO: monta um plano com regras fixas, sem IA.
@@ -9,7 +9,7 @@ import type { PlanRequest, Planner } from './planner.ts';
 export class DemoPlanner implements Planner {
   constructor(private readonly speed = 1) {}
 
-  async plan(req: PlanRequest, signal: AbortSignal): Promise<Plan> {
+  async plan(req: PlanRequest, signal: AbortSignal): Promise<PlanOutcome> {
     await sleep(3500 / this.speed, signal);
     const text = req.description.toLowerCase();
     const needsBackend = /\b(api|backend|servidor|banco|dados|login|cadastro)\b/.test(text);
@@ -52,9 +52,10 @@ export class DemoPlanner implements Planner {
         acceptanceCriteria: ['Testes do fluxo principal passando'],
       },
     );
-    return {
+    const plan: Plan = {
       summary: `[DEMONSTRAÇÃO] Plano gerado por regras locais, sem IA: ${tasks.length} tarefas para "${req.name}".`,
       tasks,
     };
+    return { plan, costUsd: null };
   }
 }
