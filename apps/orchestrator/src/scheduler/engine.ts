@@ -32,6 +32,8 @@ export interface EngineOptions {
   ids: IdGen;
   maxConcurrency: number;
   projectBudgetUsd: number;
+  /** Estimativa de custo por tarefa antes da execução (null = não estimar, ex.: modo demo). */
+  estimateTask?: (role: Task['role']) => number | null;
 }
 
 export class EngineError extends Error {
@@ -162,6 +164,8 @@ export class Engine {
       if (current.status !== 'planning') return; // cancelado durante o planejamento
 
       const keyToId = new Map(plan.tasks.map((t) => [t.key, this.o.ids('tsk')]));
+      const estimates = plan.tasks.map((t) => this.o.estimateTask?.(t.role) ?? null);
+      const estimatedTotal = estimates.every((e) => e === null) ? null : estimates.reduce<number>((s, e) => s + (e ?? 0), 0);
       this.o.repo.transaction(() => {
         plan.tasks.forEach((pt, order) => {
           this.saveTask({
@@ -180,14 +184,14 @@ export class Engine {
             startedAt: null,
             finishedAt: null,
             costUsd: null,
-            estimatedCostUsd: null,
+            estimatedCostUsd: estimates[order] ?? null,
             filesChanged: [],
             tests: null,
             summary: null,
             error: null,
           });
         });
-        this.saveProject({ ...current, status: 'awaiting_plan_approval', planSummary: plan.summary });
+        this.saveProject({ ...current, status: 'awaiting_plan_approval', planSummary: plan.summary, estimatedCostUsd: estimatedTotal });
         this.saveApproval({
           id: this.o.ids('apr'),
           projectId,
@@ -196,7 +200,10 @@ export class Engine {
           kind: 'plan',
           category: 'plan',
           title: `Aprovar plano de "${project.name}"`,
-          detail: `${plan.summary}\n\n` + plan.tasks.map((t, i) => `${i + 1}. [${t.role}] ${t.title}`).join('\n'),
+          detail:
+            `${plan.summary}\n\n` +
+            plan.tasks.map((t, i) => `${i + 1}. [${t.role}] ${t.title}`).join('\n') +
+            (estimatedTotal !== null ? `\n\nCusto estimado: US$ ${estimatedTotal.toFixed(2)} (orçamento US$ ${project.budgetUsd.toFixed(2)})` : ''),
           payload: plan,
           status: 'pending',
           createdAt: this.now(),
@@ -232,6 +239,14 @@ export class Engine {
     this.abortProjectWork(projectId, reason);
     this.log('warn', `Projeto pausado: ${reason}`, projectId);
     return paused;
+  }
+
+  /** Pausa todas as execuções em andamento. */
+  pauseAll(reason = 'Todas as execuções pausadas pelo administrador'): Project[] {
+    return this.o.repo
+      .listProjects()
+      .filter((p) => p.status === 'running')
+      .map((p) => this.pauseProject(p.id, reason));
   }
 
   resumeProject(projectId: string): Project {

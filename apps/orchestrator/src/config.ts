@@ -16,6 +16,9 @@ export interface Config {
   model: string;
   taskBudgetUsd: number;
   projectBudgetUsd: number;
+  /** Preço do modelo (US$ por milhão de tokens) para a estimativa de custo. */
+  priceInputPerMTok: number;
+  priceOutputPerMTok: number;
 }
 
 const ROOT = path.resolve(import.meta.dirname, '../../..');
@@ -49,5 +52,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     model: env.ACC_MODEL ?? 'sonnet',
     taskBudgetUsd: num(env.ACC_TASK_BUDGET_USD, 0.5, 'ACC_TASK_BUDGET_USD'),
     projectBudgetUsd: num(env.ACC_PROJECT_BUDGET_USD, 2, 'ACC_PROJECT_BUDGET_USD'),
+    // Padrão: Claude Sonnet 5.5 (US$ 2 entrada / US$ 10 saída por milhão de tokens).
+    priceInputPerMTok: num(env.ACC_PRICE_INPUT_PER_MTOK, 2, 'ACC_PRICE_INPUT_PER_MTOK'),
+    priceOutputPerMTok: num(env.ACC_PRICE_OUTPUT_PER_MTOK, 10, 'ACC_PRICE_OUTPUT_PER_MTOK'),
   };
 }

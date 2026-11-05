@@ -2,6 +2,9 @@ import type { AccEvent, UnsequencedEvent, Agent, Approval, Project, Run, Task } 
 
 export interface EventQuery {
   after?: number;
+  /** Eventos anteriores a este número (para paginar para trás). Retorna os mais recentes. */
+  before?: number;
+  types?: string[];
   projectId?: string;
   agentId?: string;
   taskId?: string;

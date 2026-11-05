@@ -9,7 +9,7 @@ import { openSqlite } from '../src/store/sqlite.ts';
 import { systemClock, uuidIds } from '../src/util/runtime.ts';
 import { Workspaces } from '../src/workspace/workspace.ts';
 
-export function makeEngine(opts: { repo?: Repository; speed?: number; maxConcurrency?: number; planner?: Planner; runner?: Runner } = {}) {
+export function makeEngine(opts: { repo?: Repository; speed?: number; maxConcurrency?: number; planner?: Planner; runner?: Runner; estimateTask?: (role: 'programmer' | 'designer' | 'tester') => number | null } = {}) {
   const repo = opts.repo ?? openSqlite(':memory:');
   const bus = new EventBus(repo, 'demo', systemClock);
   const speed = opts.speed ?? 500;
@@ -24,6 +24,7 @@ export function makeEngine(opts: { repo?: Repository; speed?: number; maxConcurr
     ids: uuidIds,
     maxConcurrency: opts.maxConcurrency ?? 2,
     projectBudgetUsd: 2,
+    estimateTask: opts.estimateTask,
   });
   engine.init();
   return { repo, bus, engine };

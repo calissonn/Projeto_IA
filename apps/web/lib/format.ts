@@ -83,3 +83,28 @@ export function describeEvent(e: AccEvent): { text: string; tone: Tone } | null 
       return null;
   }
 }
+
+/** Versão completa para a tela de logs (inclui mudanças de projeto e tarefa). */
+export function describeLogEvent(e: AccEvent): { text: string; tone: Tone } | null {
+  if (e.type === 'task.upserted') return { text: `Tarefa "${e.task.title}": ${TASK_STATUS_LABEL[e.task.status].toLowerCase()}`, tone: toneForStatus(e.task.status) };
+  if (e.type === 'project.upserted') return { text: `Projeto "${e.project.name}": ${PROJECT_STATUS_LABEL[e.project.status].toLowerCase()}`, tone: toneForStatus(e.project.status) };
+  return describeEvent(e);
+}
+
+/** Categorias de evento usadas nos filtros de log. */
+export const LOG_CATEGORIES: { id: string; label: string; types: AccEvent['type'][] }[] = [
+  { id: 'all', label: 'Tudo', types: ['log', 'run.started', 'run.activity', 'run.finished', 'approval.upserted', 'task.upserted', 'project.upserted'] },
+  { id: 'activity', label: 'Ações dos agentes', types: ['run.activity'] },
+  { id: 'runs', label: 'Execuções', types: ['run.started', 'run.finished'] },
+  { id: 'approvals', label: 'Aprovações', types: ['approval.upserted'] },
+  { id: 'status', label: 'Projetos e tarefas', types: ['task.upserted', 'project.upserted'] },
+  { id: 'system', label: 'Mensagens do sistema', types: ['log'] },
+];
+
+/** Chave para descartar repetições seguidas do mesmo estado (ex.: tarefa atualizada sem mudar de status). */
+export function dedupeKey(e: AccEvent): string | null {
+  if (e.type === 'task.upserted') return `t:${e.task.id}:${e.task.status}`;
+  if (e.type === 'project.upserted') return `p:${e.project.id}:${e.project.status}`;
+  if (e.type === 'approval.upserted') return `a:${e.approval.id}:${e.approval.status}`;
+  return null;
+}

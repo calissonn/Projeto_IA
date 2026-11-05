@@ -1,10 +1,11 @@
 'use client';
+import Link from 'next/link';
 import { useMemo } from 'react';
 import { PROJECT_STATUS_LABEL, ROLE_LABEL, TASK_STATUS_LABEL, toneForStatus } from '@/lib/format';
 import { selectAgent, useAcc } from '@/lib/store';
 import { Badge, Card, Empty } from './ui';
 
-/** Lista resumida de projetos e tarefas. A Central de Comando completa vem na Etapa 3. */
+/** Lista resumida de projetos e tarefas. A Central de Comando tem a versão completa. */
 export function Projects() {
   const projects = useAcc((s) => s.projects);
   const tasks = useAcc((s) => s.tasks);
@@ -25,7 +26,9 @@ export function Projects() {
             return (
               <li key={p.id}>
                 <div className="flex items-start justify-between gap-2">
-                  <p className="font-medium">{p.name}</p>
+                  <Link href={`/command/projects/${p.id}`} className="font-medium hover:underline">
+                    {p.name}
+                  </Link>
                   <Badge tone={toneForStatus(p.status)}>{PROJECT_STATUS_LABEL[p.status]}</Badge>
                 </div>
                 {pt.length > 0 && (

@@ -11,8 +11,8 @@ Arquitetura completa, custos, riscos e plano: **[docs/ARQUITETURA.md](docs/ARQUI
 |---|---|
 | 1. Fundação (orquestrador, eventos, banco, modo demo) | ✅ concluída |
 | 2. Prédio animado (Next.js + Phaser) | ✅ concluída |
-| 3. Central de Comando | ⏳ próxima |
-| 4. Execução real com Claude Code (Agent SDK) | ⏳ |
+| 3. Central de Comando | ✅ concluída |
+| 4. Execução real com Claude Code (Agent SDK) | ⏳ próxima |
 | 5. Acabamento | ⏳ |
 
 > O **modo real ainda não está habilitado**: `ACC_MODE=real` encerra com uma mensagem explicando que ele chega na Etapa 4.
@@ -69,6 +69,27 @@ Segurança da web: o navegador nunca recebe o token. A aplicação Next.js repas
 pelo servidor (`/api/acc/*`, apenas rotas conhecidas; ações exigem mesma origem) e transmite os eventos em
 tempo real por Server-Sent Events (`/api/stream`).
 
+## Central de Comando (Etapa 3)
+
+Em **http://localhost:3000/command** (link “Central de Comando” no topo):
+
+| Seção | O que permite |
+|---|---|
+| Indicadores | projetos ativos, agentes trabalhando, tarefas em andamento, aprovações pendentes, tarefas com erro, custo estimado e medido |
+| Projetos | criar projeto, buscar e filtrar por situação, pausar/retomar/cancelar, abrir o detalhe |
+| Detalhe do projeto | plano da coordenadora, tarefas com dependências, agente, tempo, custo, arquivos, testes, erros e execução; aprovações e histórico do projeto |
+| Agentes | estado atual, tarefa e projeto de cada agente (clique abre o painel do agente) |
+| Aprovações | fila com aprovar/rejeitar (com motivo) e histórico completo de decisões |
+| Erros | tarefas com falha ou bloqueadas, testes que falharam, execuções interrompidas e eventos de alerta |
+| Custos | orçamento, estimado e medido por projeto e por cargo, com a explicação do cálculo |
+| Histórico e logs | todos os eventos gravados, com filtros por categoria, agente, projeto e texto, atualização em tempo real e paginação |
+
+O botão **Pausar todas as execuções** interrompe tudo de uma vez. A aba fica no endereço (`/command#aprovacoes`), então dá para compartilhar o link.
+
+**Custos:** o estimado é calculado no plano (consumo típico de cada cargo × preço do modelo, configurável em
+`ACC_PRICE_INPUT_PER_MTOK`/`ACC_PRICE_OUTPUT_PER_MTOK`; padrão Claude Sonnet 5.5: US$ 2 / US$ 10 por milhão de tokens).
+O medido vem do Claude Agent SDK ao fim de cada execução (estimativa do SDK, não fatura). No modo demonstração ambos aparecem como “—”.
+
 ## API do orquestrador
 
 Também é possível controlar tudo direto pela API (útil para automações):
@@ -101,10 +122,11 @@ Inclua `#erro` na descrição do projeto para ver o fluxo de erro (testes falhan
 |---|---|---|
 | GET | `/api/health` | modo atual |
 | GET | `/api/snapshot` | estado completo + último número de sequência |
-| GET | `/api/events?after=&projectId=&agentId=&taskId=&runId=` | histórico de eventos |
+| GET | `/api/events?after=&before=&types=&projectId=&agentId=&taskId=&runId=&limit=` | histórico de eventos (`before` pagina para trás) |
 | POST | `/api/projects` | criar projeto `{name, description, budgetUsd?}` |
 | GET | `/api/projects/:id` | projeto, tarefas e aprovações |
 | POST | `/api/projects/:id/pause` · `/resume` · `/cancel` | controle de execução |
+| POST | `/api/pause-all` | pausa todos os projetos em execução |
 | POST | `/api/approvals/:id` | `{decision: "approve" \| "reject", reason?}` |
 | GET | `/api/agents/:id` | agente + histórico de atividades |
 | GET | `/api/runs/:id` | detalhes de uma execução (todos os eventos) |

@@ -177,13 +177,97 @@ try {
     await shot('11-erro');
   });
 
-  await step('celular: layout sem rolagem horizontal', async () => {
+  // ---------------------------------------------------------------- Central de Comando (Etapa 3)
+  page.on('dialog', (d) => d.accept());
+  const tab = (name) => page.getByRole('tab', { name: new RegExp(`^${name}`) }).click();
+
+  await step('Central de Comando: indicadores e projetos existentes', async () => {
+    await page.getByRole('link', { name: /Central de Comando/ }).click();
+    await page.getByTestId('kpis').waitFor();
+    await page.getByTestId('project-list').getByText('Portal de clientes').waitFor();
+    await page.getByTestId('project-list').getByText('Projeto com erro').waitFor();
+    await page.getByTestId('kpis').getByText('modo demonstração: sem custo').first().waitFor();
+    await shot('13-central-projetos');
+  });
+
+  await step('Central de Comando: aba de erros mostra a tarefa que falhou', async () => {
+    await tab('Erros');
+    await page.getByTestId('error-list').getByText('2 de 12 testes falharam', { exact: false }).first().waitFor();
+    await shot('14-central-erros');
+  });
+
+  await step('rejeitar um plano com motivo e ver no histórico de aprovações', async () => {
+    await tab('Projetos');
+    await page.getByPlaceholder('Portal de clientes').fill('Projeto rejeitado');
+    await page.getByPlaceholder('Portal com login, lista de pedidos e API').fill('Página simples que será rejeitada no plano');
+    await page.getByRole('button', { name: 'Criar projeto' }).click();
+    await tab('Aprovações');
+    const item = page.getByTestId('approvals').locator('li', { hasText: 'Projeto rejeitado' });
+    await item.waitFor({ timeout: 20000 });
+    await item.getByRole('button', { name: 'Rejeitar' }).click();
+    await item.getByPlaceholder('Ex.: escopo errado', { exact: false }).fill('Escopo errado para o teste');
+    await item.getByRole('button', { name: 'Confirmar rejeição' }).click();
+    await page.getByTestId('approval-history').getByText('Escopo errado para o teste').waitFor();
+    await shot('15-central-aprovacoes');
+  });
+
+  await step('pausar, retomar e cancelar um projeto pela interface', async () => {
+    await tab('Projetos');
+    await page.getByPlaceholder('Portal de clientes').fill('Projeto pausável');
+    await page.getByPlaceholder('Portal com login, lista de pedidos e API').fill('Página simples para testar pausa e retomada');
+    await page.getByRole('button', { name: 'Criar projeto' }).click();
+    await tab('Aprovações');
+    const item = page.getByTestId('approvals').locator('li', { hasText: 'Projeto pausável' });
+    await item.waitFor({ timeout: 20000 });
+    await item.getByRole('button', { name: 'Aprovar' }).click();
+    await tab('Projetos');
+    await page.getByTestId('project-list').getByRole('link', { name: 'Projeto pausável' }).click();
+    const detail = page.getByTestId('project-detail');
+    await detail.getByTestId('task-table').getByText('Executando').waitFor({ timeout: 20000 });
+    await detail.getByRole('button', { name: /Pausar/ }).click();
+    await detail.getByText('Pausado pelo administrador').waitFor();
+    await detail.getByTestId('task-table').getByText('Executando').waitFor({ state: 'detached' });
+    await shot('16-projeto-pausado');
+    await detail.getByRole('button', { name: /Retomar/ }).click();
+    await detail.getByTestId('task-table').getByText('Executando').waitFor({ timeout: 20000 });
+    await detail.getByRole('button', { name: 'Detalhes' }).first().click();
+    await detail.getByText('Critérios de aceite').waitFor();
+    await shot('17-detalhe-do-projeto');
+    await detail.getByRole('button', { name: 'Cancelar' }).click();
+    await detail.getByText('Cancelado pelo administrador').waitFor();
+  });
+
+  await step('histórico e logs com filtros', async () => {
+    await page.goto(`http://localhost:${WEB_PORT}/command#logs`);
+    const list = page.getByTestId('log-list');
+    await list.waitFor();
+    await page.getByLabel('Categoria').selectOption('approvals');
+    await list.getByText('Aprovação recusada', { exact: false }).first().waitFor();
+    await page.getByLabel('Buscar').fill('Projeto pausável');
+    await list.getByText('Projeto pausável', { exact: false }).first().waitFor();
+    if ((await list.getByText('Projeto rejeitado', { exact: false }).count()) > 0) throw new Error('filtro de texto não aplicado');
+    await shot('18-logs');
+  });
+
+  await step('custos: tabela por projeto e explicação do cálculo', async () => {
+    await tab('Custos');
+    await page.getByTestId('cost-table').getByText('Projeto pausável').waitFor();
+    await page.getByText('Modo demonstração: nenhuma IA é chamada', { exact: false }).waitFor();
+    await shot('19-custos');
+  });
+
+  await step('celular: prédio e Central de Comando sem rolagem horizontal', async () => {
     const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
     await mobile.goto(`http://localhost:${WEB_PORT}/`);
     await mobile.waitForFunction(() => (window.__acc?.actors().length ?? 0) === 4, null, { timeout: 20000 });
     const overflow = await mobile.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     if (overflow > 0) throw new Error(`rolagem horizontal de ${overflow}px`);
     await mobile.screenshot({ path: path.join(SHOTS, '12-celular.png') });
+    await mobile.goto(`http://localhost:${WEB_PORT}/command`);
+    await mobile.getByTestId('kpis').waitFor();
+    const overflow2 = await mobile.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    if (overflow2 > 0) throw new Error(`rolagem horizontal de ${overflow2}px na Central de Comando`);
+    await mobile.screenshot({ path: path.join(SHOTS, '20-central-celular.png') });
     await mobile.close();
   });
 
